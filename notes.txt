@@ -1,0 +1,13 @@
+/home/guillaume/envs/publik-env-py3/bin/passerelle-server
+
+/home/guillaume/envs/publik-env-py3/bin/python setup.py develop
+
+touch /home/guillaume/.config/publik/settings/passerelle/settings.d/connecteur.py
+
+/home/guillaume/envs/publik-env-py3/bin/passerelle-manage makemigrations filr
+
+/home/guillaume/envs/publik-env-py3/bin/passerelle-manage migrate_schemas
+
+sudo supervisorctl restart passerelle
+
+/home/guillaume/envs/publik-env-py3/bin/python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org XXX
