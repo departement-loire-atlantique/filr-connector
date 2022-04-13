@@ -140,3 +140,8 @@ class Filr(BaseResource):
             raise APIError("unknown-login", data={"code": code, "label": label})
         elif code in ["4", "1"]:
             raise APIError("invalid-password", data={"code": code, "label": label})
+
+
+    def send_file(self, request, user, password, folder_id, post_data):
+        # TODO : Setup post request to https://transfert.loire-atlantique.fr/rest/folders/{folder_id}?file_name=aaa.txt&overwrite_existing=true
+        pass
