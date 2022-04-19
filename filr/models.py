@@ -82,47 +82,6 @@ class Filr(BaseResource):
         return {"hello": "Filr upload!"}
 
     @endpoint(
-        name="uploadsimple",
-        methods=["post"],
-        description=_("Upload a file"),
-        parameters={
-            "WFID": {
-                "description": _("ID du worklow emetteur"),
-                "example_value": "DIA-ENS",
-            },
-            "folder_id": {
-                "description": _("ID du dossier Filr"),
-                "example_value": "855055",
-            },
-            "emails": {
-                "description": _("emails des destinataires"),
-                "example_value": "guillaume.gautier@loire-atlantique.fr;gru.loireatlantique+filr@gmail.com",
-            },
-            "login": {
-                "description": _("Login Filr"),
-                "example_value": "1234",
-            },
-            "password": {
-                "description": _("Mot de passe Filr"),
-                "example_value": "password",
-            },
-        },
-    )
-
-    def uploadsimple(self, request, folder_id, login, password, **kwargs):
-
-        file_name = 'test_upload_from_passerelle_01.txt'
-        file_path = '/home/guillaume/dev/filr-connector/filr/' + file_name
-
-        url = 'https://transfert.loire-atlantique.fr/rest/folders/' + folder_id + '/library_files?file_name=' + file_name
-
-        with open(file_path, 'rb') as payload:
-            headers = {'content-type': 'application/octet-stream'}
-            r = requests.post(url, auth=(login, password), data=payload, headers=headers)
-
-        return {}
-
-    @endpoint(
         name="upload",
         perm='can_access',
         methods=["post"],
