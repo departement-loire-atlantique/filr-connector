@@ -23,19 +23,11 @@ ADD_DOCUMENT_SCHEMA = {
     'title': 'File to upload',
     'description': '',
     'type': 'object',
-    'required': ['folder_id', 'login', 'password', 'document'],
+    'required': ['folder_id', 'document'],
     'properties': OrderedDict(
         {
             'folder_id': {
                 'description': 'Filr folder',
-                'type': 'string',
-            },
-            'login': {
-                'description': 'Filr login',
-                'type': 'string',
-            },
-            'password': {
-                'description': 'Filr password',
                 'type': 'string',
             },
             'filename': {
@@ -65,13 +57,19 @@ ADD_DOCUMENT_SCHEMA = {
     ),
 }
 
-class Filr(BaseResource):
+class Filr(BaseResource, HTTPResource):
     category = "Divers"
 
     class Meta:
         verbose_name = "Connecteur pour Filr"
 
     api_description = "API pour Filr."
+
+    base_url_filr = models.URLField(
+        verbose_name=_('URL API Filr'),
+        help_text=_('URL de base de l\'API Filr (example: https://transfert.loire-atlantique.fr/)'),
+        default='https://transfert.loire-atlantique.fr/',
+    )
 
     @endpoint()
     def info(self, request):
@@ -93,11 +91,9 @@ class Filr(BaseResource):
 
     def upload(self, request, post_data):
 
-        login = post_data.get('login')
-        password = post_data.get('password')
         filename = post_data.get('filename') or post_data['document']['filename']
-        endpoint = 'https://transfert.loire-atlantique.fr/rest/folders/' + post_data['folder_id'] + '/library_files?file_name=' + filename
+        url_filr = urlparse.urljoin(self.base_url_filr, '/rest/folders/' + post_data['folder_id'] + '/library_files?file_name=' + filename)
         content = base64.b64decode(post_data['document']['content'])
         headers = {'content-type': 'application/octet-stream'}
-        r = requests.post(endpoint, auth=(login, password), data=content, headers=headers)
+        r = requests.post(url_filr, auth=(self.basic_auth_username, self.basic_auth_password), data=content, headers=headers)
         return {'data': {"commentaire": r.text}}
