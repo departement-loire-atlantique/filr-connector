@@ -73,6 +73,8 @@ docs/_build/
 
 # Others
 .vscode/
+.idea/
+venv/
 
 # PyBuilder
 .pybuilder/
