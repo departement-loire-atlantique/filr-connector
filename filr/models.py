@@ -96,7 +96,7 @@ def getFilrFolderId(base_url, username, password, requestData, logger):
             content = {"title": payload["form_name"]}
             createFolder = requests.post(creationUrl, auth=(username, password), data=content, headers=headers)
             try:
-                result = json_loads(createFolder.content)
+                result = createFolder.content
             except (ValueError):
                 raise APIError("Invalid payload format: json expected")
             # Et on renvoie l'id du nouveau dossier
