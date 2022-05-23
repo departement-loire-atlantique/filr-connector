@@ -1,6 +1,7 @@
 import base64
 import binascii
 import datetime
+import json
 import requests
 
 from collections import OrderedDict
@@ -15,7 +16,6 @@ from passerelle.base.models import BaseResource, HTTPResource
 from passerelle.utils import xml as xmlutils
 from passerelle.utils.api import endpoint
 from passerelle.utils.conversion import to_ascii
-from passerelle.compat import json_loads
 from passerelle.utils.jsonresponse import APIError
 from passerelle.utils.validation import is_number
 
@@ -62,14 +62,14 @@ ADD_DOCUMENT_SCHEMA = {
 def getFilrFolderId(base_url, username, password, requestData, logger):
         url_filr = urlparse.urljoin(base_url, "/rest/folders")
         try:
-            payload = json_loads(requestData.body)
+            payload = json.loads(requestData.body)
         except (ValueError):
             raise APIError("Invalid payload format: json expected")
 
         r = requests.get(url_filr, auth=(username, password))
         folderId = 0
         i = 1 # On initialise à 1 pour sauter le premier item trouver dans Filr qui correspond à "Stockage Mes fichiers"
-        items = json_loads(r.content)
+        items = json.loads(r.content)
         for item in items["items"][i:]:
             folderName = item["title"]
             # Vérification du nom de l'objet parcouru
