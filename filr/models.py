@@ -27,10 +27,7 @@ ADD_DOCUMENT_SCHEMA = {
     "required": ["form_name", "document"],
     "properties": OrderedDict(
         {
-            "form_name": {
-                "description": "Form name",
-                "type": "string"
-            },
+            "form_name": {"description": "Form name", "type": "string"},
             "filename": {
                 "description": "Filr filename",
                 "type": "string",
@@ -59,49 +56,82 @@ ADD_DOCUMENT_SCHEMA = {
 }
 
 
-def getFilrFolderId(base_url, username, password, requestData, logger):
-        url_filr = urlparse.urljoin(base_url, "/rest/folders")
-        try:
-            payload = json.loads(requestData.body)
-        except (ValueError):
-            raise APIError("Invalid payload format: json expected")
+def create_filr_folder(
+    base_url, username, password, parent_folder_id, folder_name, logger
+):
 
-        r = requests.get(url_filr, auth=(username, password))
-        folderId = 0
-        i = 1 # On initialise à 1 pour sauter le premier item trouver dans Filr qui correspond à "Stockage Mes fichiers"
-        items = json.loads(r.content)
-        for item in items["items"][i:]:
-            folderName = item["title"]
-            # Vérification du nom de l'objet parcouru
-            if folderName == payload["form_name"]:
-                # Un dossier existe avec le nom du formulaire concerné,
-                # On donne l'id du dossier à la variable folderId et on sort de la boucle
-                folderId = item["id"]
-                
-                # Et on sort de la boucle
-                break
-                
-            i += 1
-            
-        logger.info(f"DEBUG : Sortie de la boucle for, tous les items ont été parcouru.")
-        
-        # On vérifie que folderId est différent de 0 (càd qu'un id a bien été récupérer)
-        if folderId != 0:
-            # On renvoie l'id
-            return folderId
-        else:
-            # Sinon on crée un dossier avec le nom du formulaire
-            creationUrl = f"{url_filr}/{item['id']}/library_folder"
-            headers = {"content-type": "application/json"}
-            content = {"title": payload["form_name"]}
-            createFolder = requests.post(creationUrl, auth=(username, password), data=content, headers=headers)
-            try:
-                result = createFolder.content
-            except (ValueError):
-                raise APIError("Invalid payload format: json expected")
-            # Et on renvoie l'id du nouveau dossier
-            return result["id"]
-        
+    url_filr_list_folders = f"{base_url}rest/folders/{parent_folder_id}/library_folders"
+    r = requests.get(url_filr_list_folders, auth=(username, password))
+    folder_id = 0
+    i = 0
+    items = json.loads(r.content)
+    for item in items["items"][i:]:
+        # Vérification du nom de l'objet parcouru
+        if folder_name == item["title"]:
+            # Un dossier existe avec le nom du formulaire concerné,
+            # On donne l'id du dossier à la variable folder_id et on sort de la boucle
+            folder_id = item["id"]
+            # Et on sort de la boucle
+            break
+        i += 1
+
+    # On vérifie que folder_id est différent de 0 (càd qu'un id a bien été récupérer)
+    if folder_id != 0:
+        # On renvoie l'id
+        logger.info(f"Le dossier {folder_name} existe déjà, son ID est {folder_id}")
+        return folder_id
+    else:
+        # Sinon on crée un dossier avec le nom du formulaire
+        logger.info(f"Le dossier {folder_name} n'existe pas, on le créé")
+        url_filr_create_folder = (
+            f"{base_url}rest/folders/{parent_folder_id}/library_folders"
+        )
+        logger.info(f"url_filr_create_folder = {url_filr_create_folder}")
+        headers = {"Content-Type": "application/json"}
+        content = {"title": folder_name}
+        created_folder = requests.post(
+            url_filr_create_folder,
+            auth=(username, password),
+            data=json.dumps(content),
+            headers=headers,
+        )
+        result = json.loads(created_folder.content)
+        # Et on renvoie l'id du nouveau dossier
+        folder_id = result["id"]
+        logger.info(f"ID dossier créé = {folder_id}")
+        return folder_id
+
+
+def create_filr_folders(base_url, username, password, form_name, form_number, logger):
+    # ID du dossier publik
+    # de recette
+    publik_folder_id = "892837"
+    # de prod
+    if username == "publik-prod":
+        publik_folder_id = "892847"
+
+    # Création du dossier correspondant au nom du formulaire
+    form_name_folder_id = create_filr_folder(
+        base_url,
+        username,
+        password,
+        parent_folder_id=publik_folder_id,
+        folder_name=form_name,
+        logger=logger,
+    )
+
+    # Création du dossier correspondant au numéro du formulaire
+    form_number_folder_id = create_filr_folder(
+        base_url,
+        username,
+        password,
+        parent_folder_id=form_name_folder_id,
+        folder_name=form_number,
+        logger=logger,
+    )
+
+    return form_number_folder_id
+
 
 class Filr(BaseResource, HTTPResource):
     category = "Divers"
@@ -113,7 +143,9 @@ class Filr(BaseResource, HTTPResource):
 
     base_url_filr = models.URLField(
         verbose_name=_("URL API Filr"),
-        help_text=_("URL de base de l\"API Filr (example: https://transfert.loire-atlantique.fr/)"),
+        help_text=_(
+            'URL de base de l"API Filr (example: https://transfert.loire-atlantique.fr/)'
+        ),
         default="https://transfert.loire-atlantique.fr/",
     )
 
@@ -126,34 +158,36 @@ class Filr(BaseResource, HTTPResource):
         return {"hello": "Filr upload!"}
 
     @endpoint(
-        name = "upload",
-        perm = "can_access",
-        methods = ["post"],
-        description = _("Upload a file"),
-        post = {
-            "request_body": {
-                "schema": {
-                    "application/json": ADD_DOCUMENT_SCHEMA
-                }
-            }
-        },
-        display_category =_("Demand"),
-        display_order = 1,
+        name="upload",
+        perm="can_access",
+        methods=["post"],
+        description=_("Upload a file"),
+        post={"request_body": {"schema": {"application/json": ADD_DOCUMENT_SCHEMA}}},
+        display_category=_("Demand"),
+        display_order=1,
     )
-
     def upload(self, request, post_data):
-        folder_id = getFilrFolderId(self.base_url_filr, self.basic_auth_username, self.basic_auth_password, request, self.logger)
-        self.logger.info(f"DEBUG : {folder_id}")
-        """ filename = post_data.get("filename") or post_data["document"]["filename"]
-        url_filr = urlparse.urljoin(self.base_url_filr, f"/rest/folders/{folder_id}/library_files?file_name={filename}")
+
+        form_name = post_data["form_name"]
+        form_number = post_data["form_number"]
+
+        folder_id = create_filr_folders(
+            self.base_url_filr,
+            self.basic_auth_username,
+            self.basic_auth_password,
+            form_name,
+            form_number,
+            self.logger,
+        )
+
+        filename = post_data.get("filename") or post_data["document"]["filename"]
+        url_filr_upload_file = f"{self.base_url_filr}rest/folders/{folder_id}/library_files?file_name={filename}"
         content = base64.b64decode(post_data["document"]["content"])
         headers = {"content-type": "application/octet-stream"}
-    
-        r = requests.post(url_filr, auth=(self.basic_auth_username, self.basic_auth_password), data=content, headers=headers)
-        
-        return {
-            "data": {
-                "folderId": folder_id,
-                "commentaire": r.text
-            }
-        } """
+        r = requests.post(
+            url_filr_upload_file,
+            auth=(self.basic_auth_username, self.basic_auth_password),
+            data=content,
+            headers=headers,
+        )
+        return {"data": {"commentaire": r.text}}
