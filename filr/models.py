@@ -55,6 +55,18 @@ ADD_DOCUMENT_SCHEMA = {
     ),
 }
 
+FOLDER_ID = {
+    "description": _("Identifiant du dossier Filr"),
+}
+DAYS_TO_EXPIRE = {
+    "description": _("Nombre de jours avant expiration du lien de partage"),
+}
+EMAILS = {
+    "description": _(
+        "Emails des destinaires du lien de partage, séparés par des virgules"
+    ),
+}
+
 
 def create_filr_folder(
     base_url, username, password, parent_folder_id, folder_name, logger
@@ -89,14 +101,14 @@ def create_filr_folder(
         logger.info(f"url_filr_create_folder = {url_filr_create_folder}")
         headers = {"Content-Type": "application/json"}
         content = {"title": folder_name}
-        created_folder = requests.post(
+        r = requests.post(
             url_filr_create_folder,
             auth=(username, password),
             data=json.dumps(content),
             headers=headers,
         )
-        result = json.loads(created_folder.content)
-        # Et on renvoie l'id du nouveau dossier
+        result = json.loads(r.content)
+        # On renvoie l'id du nouveau dossier
         folder_id = result["id"]
         logger.info(f"ID dossier créé = {folder_id}")
         return folder_id
@@ -149,22 +161,12 @@ class Filr(BaseResource, HTTPResource):
         default="https://transfert.loire-atlantique.fr/",
     )
 
-    @endpoint()
-    def info(self, request):
-        return {"hello": "Filr! ça marche"}
-
-    @endpoint(perm="can_access")
-    def upload(self, request):
-        return {"hello": "Filr upload!"}
-
     @endpoint(
         name="upload",
         perm="can_access",
         methods=["post"],
         description=_("Upload a file"),
         post={"request_body": {"schema": {"application/json": ADD_DOCUMENT_SCHEMA}}},
-        display_category=_("Demand"),
-        display_order=1,
     )
     def upload(self, request, post_data):
 
@@ -190,4 +192,74 @@ class Filr(BaseResource, HTTPResource):
             data=content,
             headers=headers,
         )
-        return {"data": {"commentaire": r.text}}
+        return {"data": {"folder_id": folder_id}}
+
+    @endpoint(
+        name="share",
+        perm="can_access",
+        methods=["post"],
+        description=_("Partager un dossier à des utilisateurs externes"),
+        parameters={
+            "folder_id": FOLDER_ID,
+            "days_to_expire": DAYS_TO_EXPIRE,
+            "emails": EMAILS,
+        },
+    )
+    def share(self, request, folder_id, days_to_expire, emails):
+
+        self.logger.info(f"folder_id = {folder_id}")
+        self.logger.info(f"days_to_expire = {days_to_expire}")
+        self.logger.info(f"emails = {emails}")
+
+        try:
+            days_to_expire = int(days_to_expire)
+        except (ValueError,):
+            raise APIError("days_to_expire doit être un nombre", http_status=400)
+
+        emails = emails.split(",")
+        for email in emails:
+            email = emails[0].strip()
+            url_filr_share_folder = (
+                f"{self.base_url_filr}rest/folders/{folder_id}/shares?notify=true"
+            )
+            r = requests.post(
+                url_filr_share_folder,
+                auth=(self.basic_auth_username, self.basic_auth_password),
+                json={
+                    "days_to_expire" : days_to_expire,
+                    "recipient": {
+                        "type": "external_user",
+                        "email": email
+                    },
+                    "access": {
+                        "role": "VIEWER"
+                    }
+                }
+            )
+
+        # Note : si on a plusieurs emails autant d'ID de partage seront générés
+        # Et on ne renverra que le dernier ID
+        # TODO est-ce utilie de renvoyer l'ID de partage ? Car on en fait rien au final.
+        
+        result = json.loads(r.content)
+        # On renvoie l'id du partage
+        shared_id = result["id"]
+        return {"data": {"shared_id": shared_id}}
+
+    @endpoint(
+        name="delete_folder",
+        perm="can_access",
+        methods=["delete"],
+        description=_("Supprimer un dossier"),
+        parameters={
+            "folder_id": FOLDER_ID,
+        },
+    )
+    def delete_folder(self, request, folder_id):
+        url_filr_delete_folder = (
+            f"{self.base_url_filr}rest/folders/{folder_id}"
+        )
+        r = requests.delete(
+            url_filr_delete_folder,
+            auth=(self.basic_auth_username, self.basic_auth_password),
+        )
