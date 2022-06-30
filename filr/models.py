@@ -218,7 +218,7 @@ class Filr(BaseResource, HTTPResource):
 
         emails = emails.split(",")
         for email in emails:
-            email = emails[0].strip()
+            email = email.strip()
             url_filr_share_folder = (
                 f"{self.base_url_filr}rest/folders/{folder_id}/shares?notify=true"
             )
