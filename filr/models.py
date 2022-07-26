@@ -216,6 +216,7 @@ class Filr(BaseResource, HTTPResource):
         except (ValueError,):
             raise APIError("days_to_expire doit être un nombre", http_status=400)
 
+        emails = emails.strip(",") # si virgules au début ou à la fin, on les enlève
         emails = emails.split(",")
         for email in emails:
             email = email.strip()
