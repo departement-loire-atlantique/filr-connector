@@ -2,6 +2,7 @@ import base64
 import binascii
 import datetime
 import json
+import re
 import requests
 
 from collections import OrderedDict
@@ -207,19 +208,42 @@ class Filr(BaseResource, HTTPResource):
     )
     def share(self, request, folder_id, days_to_expire, emails):
 
-        self.logger.info(f"folder_id = {folder_id}")
-        self.logger.info(f"days_to_expire = {days_to_expire}")
-        self.logger.info(f"emails = {emails}")
+        self.logger.info(f"Partage dossier {folder_id} pour '{emails}'. ")
 
         try:
             days_to_expire = int(days_to_expire)
-        except (ValueError,):
+        except (ValueError):
             raise APIError("days_to_expire doit être un nombre", http_status=400)
 
-        emails = emails.strip(",") # si virgules au début ou à la fin, on les enlève
+        emails = emails.strip().strip(
+            ","
+        )  # si espaces, retours chariot et virgules au début ou à la fin, on les enlève
+
         emails = emails.split(",")
+
+        user_part_re = re.compile(
+            r"(^[-!#$%&'*+/=?^_`{}|~0-9A-Z]+(\.[-!#$%&'*+/=?^_`{}|~0-9A-Z]+)*\Z"  # dot-atom
+            r'|^"([\001-\010\013\014\016-\037!#-\[\]-\177]|\\[\001-\011\013\014\016-\177])*"\Z)',  # quoted-string
+            re.IGNORECASE,
+        )
+
         for email in emails:
             email = email.strip()
+            error_email_msg = f"'{email}' n'est pas une adresse électronique valide. Le courriel avec le lien de partage ne peut être envoyé à ce contact."
+            if "@" not in email:
+                self.logger.error(error_email_msg)
+                return
+            if " " in email:
+                self.logger.error(error_email_msg)
+                return
+            if " " in email.count("@") != 1:
+                self.logger.error(error_email_msg)
+                return
+            user_part, domain = email.rsplit("@", 1)
+            if not user_part_re.match(user_part):
+                self.logger.error(error_email_msg)
+                return
+
             url_filr_share_folder = (
                 f"{self.base_url_filr}rest/folders/{folder_id}/shares?notify=true"
             )
@@ -227,25 +251,20 @@ class Filr(BaseResource, HTTPResource):
                 url_filr_share_folder,
                 auth=(self.basic_auth_username, self.basic_auth_password),
                 json={
-                    "days_to_expire" : days_to_expire,
-                    "recipient": {
-                        "type": "external_user",
-                        "email": email
-                    },
-                    "access": {
-                        "role": "VIEWER"
-                    }
-                }
+                    "days_to_expire": days_to_expire,
+                    "recipient": {"type": "external_user", "email": email},
+                    "access": {"role": "VIEWER"},
+                },
             )
 
-        # Note : si on a plusieurs emails autant d'ID de partage seront générés
-        # Et on ne renverra que le dernier ID
-        # TODO est-ce utilie de renvoyer l'ID de partage ? Car on en fait rien au final.
-        
-        result = json.loads(r.content)
-        # On renvoie l'id du partage
-        shared_id = result["id"]
-        return {"data": {"shared_id": shared_id}}
+            # Note : si on a plusieurs emails autant d'ID de partage seront générés
+            # Et on ne renverra que le dernier ID
+            # TODO est-ce utile de renvoyer l'ID de partage ? Car on en fait rien au final.
+
+            result = json.loads(r.content)
+            # On renvoie l'id du partage
+            shared_id = result["id"]
+            return {"data": {"shared_id": shared_id}}
 
     @endpoint(
         name="delete_folder",
@@ -257,9 +276,7 @@ class Filr(BaseResource, HTTPResource):
         },
     )
     def delete_folder(self, request, folder_id):
-        url_filr_delete_folder = (
-            f"{self.base_url_filr}rest/folders/{folder_id}"
-        )
+        url_filr_delete_folder = f"{self.base_url_filr}rest/folders/{folder_id}"
         r = requests.delete(
             url_filr_delete_folder,
             auth=(self.basic_auth_username, self.basic_auth_password),
